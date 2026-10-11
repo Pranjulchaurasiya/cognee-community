@@ -27,6 +27,7 @@ from cognee_community_connector_opsgenie.client import OpsgenieClient
 
 OPSGENIE_ALERTS_TABLE_NAME = "opsgenie_alerts"
 OPSGENIE_SCHEDULES_TABLE_NAME = "opsgenie_schedules"
+OPSGENIE_ESCALATIONS_TABLE_NAME = "opsgenie_escalations"
 OPSGENIE_SOURCE_NAME = "opsgenie"
 
 _EXTRA_HINT = (
@@ -40,6 +41,7 @@ def opsgenie_source(
     base_url: str | None = None,
     query: str | None = None,
     include_schedules: bool = True,
+    include_escalations: bool = True,
     verify_ssl: bool = True,
     client: Any = None,
 ):
@@ -106,9 +108,24 @@ def opsgenie_source(
             yield _schedule_to_document(sched, on_calls, server_base)
         logger.info("Opsgenie: synced %d schedule(s).", count)
 
+    @dlt.resource(
+        name=OPSGENIE_ESCALATIONS_TABLE_NAME,
+        primary_key="id",
+        write_disposition="replace",
+    )
+    def opsgenie_escalations():
+        if not include_escalations:
+            return
+        escalations = client.get_escalations()
+        count = 0
+        for esc in escalations:
+            count += 1
+            yield _escalation_to_document(esc, server_base)
+        logger.info("Opsgenie: synced %d escalation policy(ies).", count)
+
     @dlt.source(name=OPSGENIE_SOURCE_NAME)
     def _opsgenie():
-        return [opsgenie_alerts, opsgenie_schedules]
+        return [opsgenie_alerts, opsgenie_schedules, opsgenie_escalations]
 
     source = _opsgenie()
     setattr(source, DOCUMENT_SOURCE_ATTR, OPSGENIE_SOURCE_NAME)
@@ -227,5 +244,60 @@ def _schedule_to_document(
         "id": f"opsgenie_schedule_{sched_id}",
         "url": web_url,
         "title": f"Opsgenie Schedule: {name}",
+        "content": content,
+    }
+
+
+def _escalation_to_document(escalation: dict[str, Any], base_url: str) -> dict[str, Any]:
+    """Convert an Opsgenie escalation policy into a structured markdown document."""
+    esc_id = escalation.get("id", "unknown")
+    name = escalation.get("name", "Unnamed Escalation")
+    description = escalation.get("description", "No description provided.")
+    rules = escalation.get("rules") or []
+    repeat = escalation.get("repeat") or {}
+
+    lines = [
+        f"# Opsgenie Escalation Policy: {name}",
+        "",
+        f"**Description**: {description}",
+        "",
+        "## Escalation Tiers & Rules",
+    ]
+
+    if not rules:
+        lines.append("- *No escalation steps configured.*")
+    else:
+        for idx, rule in enumerate(rules, 1):
+            condition = rule.get("condition", "if-not-acked")
+            delay = rule.get("delay") or {}
+            delay_amount = delay.get("timeAmount", 0)
+            delay_unit = delay.get("timeUnit", "minutes")
+            recipient = rule.get("recipient") or {}
+            recip_type = recipient.get("type", "recipient")
+            recip_id = recipient.get("name") or recipient.get("id") or "unknown"
+
+            cond_str = "unacknowledged" if "acked" in condition else "unclosed"
+            lines.append(
+                f"- **Step {idx} ({delay_amount} {delay_unit} delay)**: "
+                f"If alert remains {cond_str}, escalate to **{recip_type.title()}** `{recip_id}`."
+            )
+
+    if repeat:
+        wait_interval = repeat.get("waitInterval", 0)
+        count = repeat.get("count", 0)
+        lines.extend([
+            "",
+            "## Repeat Policy",
+            f"- **Repeat Count**: {count}",
+            f"- **Wait Interval**: {wait_interval} minutes",
+        ])
+
+    content = "\n".join(lines)
+    web_url = f"{base_url}/escalation/detail/{esc_id}"
+
+    return {
+        "id": f"opsgenie_escalation_{esc_id}",
+        "url": web_url,
+        "title": f"Opsgenie Escalation Policy: {name}",
         "content": content,
     }

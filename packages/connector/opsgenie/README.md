@@ -6,8 +6,9 @@ Syncs enterprise alerts, incident severities (P1–P5), responder escalations, a
 
 ## Features
 
-- **Alert Telemetry**: Ingests active and historical alerts, priority levels, responder assignments, tags, and diagnostics.
+- **Alert Telemetry**: Ingests active and historical alerts, priority levels (P1–P5), responder assignments, tags, and diagnostics.
 - **On-Call Visibility**: Ingests schedules, rotations, and active on-call engineers.
+- **Escalation Routing**: Ingests multi-tier escalation policies, delay intervals, and fallback responders.
 - **Forget-On-Delete**: Uses `write_disposition="replace"` so resolved or deleted alerts automatically drop out of Cognee's graph via orphan cleanup.
 - **Query Scoping**: Filter alerts using native Opsgenie query syntax (e.g. `status: open AND priority: P1`).
 

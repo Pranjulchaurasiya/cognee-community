@@ -13,6 +13,7 @@ except ImportError:
 
 from cognee_community_connector_opsgenie import (
     OPSGENIE_ALERTS_TABLE_NAME,
+    OPSGENIE_ESCALATIONS_TABLE_NAME,
     OPSGENIE_SCHEDULES_TABLE_NAME,
     OPSGENIE_SOURCE_NAME,
     OpsgenieAuthError,
@@ -23,8 +24,39 @@ from cognee_community_connector_opsgenie import (
 )
 from cognee_community_connector_opsgenie.opsgenie import (
     _alert_to_document,
+    _escalation_to_document,
     _schedule_to_document,
 )
+
+
+@pytest.fixture
+def sample_escalation() -> dict[str, Any]:
+    return {
+        "id": "esc-tier-1",
+        "name": "Production Critical Escalation",
+        "description": "3-tier escalation rule for production P1 alerts",
+        "rules": [
+            {
+                "condition": "if-not-acked",
+                "delay": {"timeAmount": 0, "timeUnit": "minutes"},
+                "recipient": {"type": "schedule", "name": "Primary On-Call Schedule"},
+            },
+            {
+                "condition": "if-not-acked",
+                "delay": {"timeAmount": 5, "timeUnit": "minutes"},
+                "recipient": {"type": "user", "name": "secondary-oncall@company.com"},
+            },
+            {
+                "condition": "if-not-closed",
+                "delay": {"timeAmount": 15, "timeUnit": "minutes"},
+                "recipient": {"type": "team", "name": "SRE Leadership Team"},
+            },
+        ],
+        "repeat": {
+            "waitInterval": 15,
+            "count": 2,
+        },
+    }
 
 
 @pytest.fixture
@@ -202,6 +234,20 @@ def test_schedule_to_document_rendering(sample_schedule, sample_on_calls):
     assert "**Primary Weekly Rotation** (weekly)" in content
 
 
+def test_escalation_to_document_rendering(sample_escalation):
+    doc = _escalation_to_document(sample_escalation, "https://api.opsgenie.com")
+    assert doc["id"] == "opsgenie_escalation_esc-tier-1"
+    assert doc["title"] == "Opsgenie Escalation Policy: Production Critical Escalation"
+    content = doc["content"]
+    assert "# Opsgenie Escalation Policy: Production Critical Escalation" in content
+    assert "3-tier escalation rule for production P1 alerts" in content
+    assert "Step 1 (0 minutes delay)" in content
+    assert "Step 2 (5 minutes delay)" in content
+    assert "Step 3 (15 minutes delay)" in content
+    assert "**Repeat Count**: 2" in content
+    assert "**Wait Interval**: 15 minutes" in content
+
+
 # ===========================================================================
 # dlt source and integration pipeline invariants
 # ===========================================================================
@@ -218,25 +264,30 @@ def test_opsgenie_source_attributes():
     resources = {r.name: r for r in source.selected_resources.values()}
     assert OPSGENIE_ALERTS_TABLE_NAME in resources
     assert OPSGENIE_SCHEDULES_TABLE_NAME in resources
+    assert OPSGENIE_ESCALATIONS_TABLE_NAME in resources
 
     # Invariant 3: Write disposition is replace for orphan cleanup
     assert resources[OPSGENIE_ALERTS_TABLE_NAME].write_disposition == "replace"
     assert resources[OPSGENIE_SCHEDULES_TABLE_NAME].write_disposition == "replace"
+    assert resources[OPSGENIE_ESCALATIONS_TABLE_NAME].write_disposition == "replace"
 
 
-def test_opsgenie_source_execution(sample_alert, sample_schedule, sample_on_calls):
+def test_opsgenie_source_execution(sample_alert, sample_schedule, sample_on_calls, sample_escalation):
     mock_client = MagicMock(spec=OpsgenieClient)
     mock_client.base_url = "https://api.opsgenie.com"
     mock_client.get_alerts.return_value = [sample_alert]
     mock_client.get_schedules.return_value = [sample_schedule]
     mock_client.get_schedule_on_calls.return_value = sample_on_calls
+    mock_client.get_escalations.return_value = [sample_escalation]
 
     source = opsgenie_source(client=mock_client)
     alerts_resource = source.selected_resources[OPSGENIE_ALERTS_TABLE_NAME]
     schedules_resource = source.selected_resources[OPSGENIE_SCHEDULES_TABLE_NAME]
+    escalations_resource = source.selected_resources[OPSGENIE_ESCALATIONS_TABLE_NAME]
 
     alert_rows = list(alerts_resource)
     schedule_rows = list(schedules_resource)
+    escalation_rows = list(escalations_resource)
 
     assert len(alert_rows) == 1
     assert alert_rows[0]["id"] == "opsgenie_alert_alert-101-xyz"
@@ -245,3 +296,7 @@ def test_opsgenie_source_execution(sample_alert, sample_schedule, sample_on_call
     assert len(schedule_rows) == 1
     assert schedule_rows[0]["id"] == "opsgenie_schedule_sched-202-abc"
     assert schedule_rows[0]["title"] == "Opsgenie Schedule: Payments Tier 1 On-Call"
+
+    assert len(escalation_rows) == 1
+    assert escalation_rows[0]["id"] == "opsgenie_escalation_esc-tier-1"
+    assert escalation_rows[0]["title"] == "Opsgenie Escalation Policy: Production Critical Escalation"
