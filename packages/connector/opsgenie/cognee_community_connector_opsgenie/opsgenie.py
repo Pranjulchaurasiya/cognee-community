@@ -1,0 +1,231 @@
+"""DLT source for Atlassian Opsgenie alerts and on-call schedules (full snapshot + forget-on-delete).
+
+Fetches Opsgenie alerts, on-call schedules, and active responder rotations, renders them
+to structured markdown documents, and yields them as dlt resources for Cognee's ingestion
+and knowledge graph extraction engine.
+
+Sets ``DOCUMENT_SOURCE_ATTR = "opsgenie"`` and ``write_disposition="replace"`` so resolved,
+deleted, or expired incidents are automatically cleaned up in Cognee.
+"""
+
+import os
+from typing import Any
+
+try:
+    from cognee.shared.logging_utils import get_logger
+    logger = get_logger("opsgenie_connector")
+except ImportError:
+    import logging
+    logger = logging.getLogger("opsgenie_connector")
+
+try:
+    from cognee.tasks.ingestion.dlt_utils import DOCUMENT_SOURCE_ATTR
+except ImportError:
+    DOCUMENT_SOURCE_ATTR = "cognee_document_source"
+
+from cognee_community_connector_opsgenie.client import OpsgenieClient
+
+OPSGENIE_ALERTS_TABLE_NAME = "opsgenie_alerts"
+OPSGENIE_SCHEDULES_TABLE_NAME = "opsgenie_schedules"
+OPSGENIE_SOURCE_NAME = "opsgenie"
+
+_EXTRA_HINT = (
+    'The Opsgenie connector requires dependencies: '
+    'pip install "cognee-community-connector-opsgenie" (provides dlt and httpx).'
+)
+
+
+def opsgenie_source(
+    api_key: str | None = None,
+    base_url: str | None = None,
+    query: str | None = None,
+    include_schedules: bool = True,
+    verify_ssl: bool = True,
+    client: Any = None,
+):
+    """Create a dlt source yielding Opsgenie alerts and on-call schedules as documents.
+
+    Args:
+        api_key: Opsgenie API key. Falls back to ``OPSGENIE_API_KEY`` env var.
+        base_url: Opsgenie API base URL (default: ``https://api.opsgenie.com``).
+            Falls back to ``OPSGENIE_BASE_URL`` env var.
+        query: Optional Opsgenie alert filter query (e.g. ``status: open``).
+        include_schedules: Whether to ingest on-call schedules alongside alerts (default: True).
+        verify_ssl: Whether to verify SSL certificates (default: True).
+        client: Pre-instantiated ``OpsgenieClient`` for testing / dependency injection.
+
+    Returns:
+        A dlt source suitable for ``cognee.add(...)``.
+    """
+    try:
+        import dlt
+    except ImportError as exc:
+        raise ImportError(_EXTRA_HINT) from exc
+
+    if client is None:
+        client = OpsgenieClient(
+            api_key=api_key,
+            base_url=base_url,
+            verify_ssl=verify_ssl,
+        )
+
+    server_base = client.base_url
+
+    @dlt.resource(
+        name=OPSGENIE_ALERTS_TABLE_NAME,
+        primary_key="id",
+        write_disposition="replace",
+    )
+    def opsgenie_alerts():
+        alerts = client.get_alerts(query=query)
+        count = 0
+        for alert in alerts:
+            count += 1
+            yield _alert_to_document(alert, server_base)
+        logger.info("Opsgenie: synced %d alert(s).", count)
+
+    @dlt.resource(
+        name=OPSGENIE_SCHEDULES_TABLE_NAME,
+        primary_key="id",
+        write_disposition="replace",
+    )
+    def opsgenie_schedules():
+        if not include_schedules:
+            return
+        schedules = client.get_schedules()
+        count = 0
+        for sched in schedules:
+            sched_id = sched.get("id") or sched.get("name")
+            on_calls = {}
+            if sched_id:
+                try:
+                    on_calls = client.get_schedule_on_calls(sched_id)
+                except Exception as e:
+                    logger.debug("Opsgenie: could not fetch on-calls for %s: %s", sched_id, e)
+            count += 1
+            yield _schedule_to_document(sched, on_calls, server_base)
+        logger.info("Opsgenie: synced %d schedule(s).", count)
+
+    @dlt.source(name=OPSGENIE_SOURCE_NAME)
+    def _opsgenie():
+        return [opsgenie_alerts, opsgenie_schedules]
+
+    source = _opsgenie()
+    setattr(source, DOCUMENT_SOURCE_ATTR, OPSGENIE_SOURCE_NAME)
+    return source
+
+
+def _alert_to_document(alert: dict[str, Any], base_url: str) -> dict[str, Any]:
+    """Convert an Opsgenie alert dictionary into a structured markdown document."""
+    alert_id = alert.get("id", "unknown")
+    message = alert.get("message", "No message provided")
+    priority = alert.get("priority", "P3")
+    status = alert.get("status", "open")
+    entity = alert.get("entity", "N/A")
+    source = alert.get("source", "N/A")
+    owner = alert.get("owner", "Unassigned")
+    created_at = alert.get("createdAt", "N/A")
+    updated_at = alert.get("updatedAt", "N/A")
+    description = alert.get("description", "")
+    tags = alert.get("tags") or []
+    responders = alert.get("responders") or []
+
+    lines = [
+        f"# Opsgenie Alert: {message}",
+        "",
+        "## Alert Details",
+        f"- **Alert ID**: {alert_id}",
+        f"- **Priority**: {priority}",
+        f"- **Status**: {status}",
+        f"- **Entity**: {entity}",
+        f"- **Source**: {source}",
+        f"- **Owner**: {owner}",
+        f"- **Created At**: {created_at}",
+        f"- **Updated At**: {updated_at}",
+    ]
+
+    if description:
+        lines.extend([
+            "",
+            "## Description",
+            description,
+        ])
+
+    if responders:
+        lines.extend([
+            "",
+            "## Assigned Responders & Teams",
+        ])
+        for resp in responders:
+            r_type = resp.get("type", "responder")
+            r_id = resp.get("name") or resp.get("id") or "unknown"
+            lines.append(f"- **{r_type.title()}**: `{r_id}`")
+
+    if tags:
+        lines.extend([
+            "",
+            "## Tags",
+        ])
+        for tag in tags:
+            lines.append(f"- `{tag}`")
+
+    content = "\n".join(lines)
+    web_url = f"{base_url}/alert/detail/{alert_id}/details"
+
+    return {
+        "id": f"opsgenie_alert_{alert_id}",
+        "url": web_url,
+        "title": f"Opsgenie Alert [{priority}]: {message}",
+        "content": content,
+    }
+
+
+def _schedule_to_document(
+    schedule: dict[str, Any],
+    on_calls: dict[str, Any],
+    base_url: str,
+) -> dict[str, Any]:
+    """Convert an Opsgenie schedule and active on-call participants to markdown."""
+    sched_id = schedule.get("id", "unknown")
+    name = schedule.get("name", "Unnamed Schedule")
+    description = schedule.get("description", "No description provided.")
+    timezone = schedule.get("timezone", "UTC")
+    enabled = schedule.get("enabled", True)
+
+    lines = [
+        f"# Opsgenie Schedule: {name}",
+        "",
+        f"**Description**: {description}",
+        f"- **Timezone**: {timezone}",
+        f"- **Enabled**: {'Yes' if enabled else 'No'}",
+    ]
+
+    active_recipients = on_calls.get("onCallRecipients") or []
+    if active_recipients:
+        lines.extend([
+            "",
+            "## Active On-Call Participants",
+        ])
+        for recipient in active_recipients:
+            lines.append(f"- `{recipient}`")
+
+    rotations = schedule.get("rotations") or []
+    if rotations:
+        lines.extend([
+            "",
+            "## Rotations",
+        ])
+        for rot in rotations:
+            rot_name = rot.get("name", "Rotation")
+            rot_type = rot.get("type", "weekly")
+            lines.append(f"- **{rot_name}** ({rot_type})")
+
+    content = "\n".join(lines)
+    web_url = f"{base_url}/schedule/detail/{sched_id}"
+
+    return {
+        "id": f"opsgenie_schedule_{sched_id}",
+        "url": web_url,
+        "title": f"Opsgenie Schedule: {name}",
+        "content": content,
+    }
