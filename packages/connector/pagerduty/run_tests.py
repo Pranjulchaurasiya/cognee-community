@@ -9,27 +9,31 @@ import cognee_community_connector_pagerduty.pagerduty as pd_mod
 # Mock dlt if not installed in the testing environment
 if pd_mod.dlt is None:
     mock_dlt = MagicMock()
-    mock_dlt.resource = lambda *a, **kw: (lambda f: f)
+    mock_dlt.resource = lambda *a, **kw: lambda f: f
+
     def fake_source(*a, **kw):
         def dec(f):
             def wrapper(*wa, **wkw):
                 s = MagicMock()
                 s.name = kw.get("name", "pagerduty")
                 return s
+
             return wrapper
+
         return dec
+
     mock_dlt.source = fake_source
     pd_mod.dlt = mock_dlt
 
-from cognee_community_connector_pagerduty.redaction import redact_secrets
 from cognee_community_connector_pagerduty.client import PagerDutyClient
 from cognee_community_connector_pagerduty.pagerduty import (
+    DOCUMENT_SOURCE_ATTR,
+    PAGERDUTY_SOURCE_NAME,
     format_incident_document,
     format_service_document,
     pagerduty_source,
-    DOCUMENT_SOURCE_ATTR,
-    PAGERDUTY_SOURCE_NAME,
 )
+from cognee_community_connector_pagerduty.redaction import redact_secrets
 
 
 class TestPagerDutyConnector(unittest.TestCase):
@@ -75,7 +79,13 @@ class TestPagerDutyConnector(unittest.TestCase):
             "service": {"id": "S1", "summary": "DB Cluster"},
             "assignments": [{"assignee": {"summary": "DevOps Lead"}}],
         }
-        notes = [{"user": {"summary": "Alice"}, "content": "Running failover", "created_at": "2026-10-11T10:02:00Z"}]
+        notes = [
+            {
+                "user": {"summary": "Alice"},
+                "content": "Running failover",
+                "created_at": "2026-10-11T10:02:00Z",
+            }
+        ]
         doc = format_incident_document(inc, notes=notes)
 
         self.assertEqual(doc["id"], "pagerduty:incident:INC101")

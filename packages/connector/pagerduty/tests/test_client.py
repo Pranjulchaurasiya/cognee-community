@@ -1,8 +1,8 @@
 """Tests for PagerDuty REST API client."""
 
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch
-import requests
 
 from cognee_community_connector_pagerduty.client import PagerDutyClient
 

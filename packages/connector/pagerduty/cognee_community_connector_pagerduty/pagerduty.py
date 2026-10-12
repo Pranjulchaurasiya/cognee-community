@@ -6,7 +6,8 @@ cognify entity extraction and knowledge graph pipeline.
 """
 
 import os
-from typing import Any, Dict, Iterator, List, Optional
+from collections.abc import Iterator
+from typing import Any
 
 from .client import PagerDutyClient
 from .redaction import redact_secrets
@@ -20,7 +21,9 @@ except ImportError:
     dlt = None
 
 
-def format_incident_document(incident: Dict[str, Any], notes: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+def format_incident_document(
+    incident: dict[str, Any], notes: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     """Serialize a PagerDuty incident and its notes into a structured document."""
     inc_id = incident.get("id", "")
     inc_num = incident.get("incident_number", "")
@@ -90,7 +93,7 @@ def format_incident_document(incident: Dict[str, Any], notes: Optional[List[Dict
     }
 
 
-def format_service_document(service: Dict[str, Any]) -> Dict[str, Any]:
+def format_service_document(service: dict[str, Any]) -> dict[str, Any]:
     """Serialize a PagerDuty service into a structured document."""
     svc_id = service.get("id", "")
     name = redact_secrets(service.get("name", "Untitled Service"))
@@ -127,13 +130,13 @@ def format_service_document(service: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def pagerduty_source(
-    token: Optional[str] = None,
-    resources: Optional[List[str]] = None,
-    statuses: Optional[List[str]] = None,
-    urgencies: Optional[List[str]] = None,
-    since: Optional[str] = None,
+    token: str | None = None,
+    resources: list[str] | None = None,
+    statuses: list[str] | None = None,
+    urgencies: list[str] | None = None,
+    since: str | None = None,
     include_notes: bool = True,
-    client: Optional[PagerDutyClient] = None,
+    client: PagerDutyClient | None = None,
 ) -> Any:
     """Create a dlt source yielding PagerDuty incidents and services as documents.
 
@@ -150,21 +153,19 @@ def pagerduty_source(
         A dlt source object configured with ``cognee_document_source = "pagerduty"``.
     """
     if dlt is None:
-        raise ImportError(
-            "dlt is required to run pagerduty_source. Install via: pip install dlt"
-        )
+        raise ImportError("dlt is required to run pagerduty_source. Install via: pip install dlt")
 
     resolved_token = token or os.getenv("PAGERDUTY_API_KEY")
     if not resolved_token and client is None:
         raise ValueError(
-            "PagerDuty API token must be provided via the 'token' argument or PAGERDUTY_API_KEY environment variable."
+            "PagerDuty API token must be provided via token or PAGERDUTY_API_KEY."
         )
 
     pd_client = client or PagerDutyClient(token=resolved_token)
     selected_resources = set(resources or ["incidents", "services"])
 
     @dlt.resource(name="pagerduty_incidents", write_disposition="merge", primary_key="id")
-    def incidents_resource() -> Iterator[Dict[str, Any]]:
+    def incidents_resource() -> Iterator[dict[str, Any]]:
         offset = 0
         limit = 100
         while True:
@@ -191,7 +192,7 @@ def pagerduty_source(
             offset += len(items)
 
     @dlt.resource(name="pagerduty_services", write_disposition="replace", primary_key="id")
-    def services_resource() -> Iterator[Dict[str, Any]]:
+    def services_resource() -> Iterator[dict[str, Any]]:
         offset = 0
         limit = 100
         while True:
@@ -212,7 +213,7 @@ def pagerduty_source(
         active_resources.append(services_resource)
 
     @dlt.source(name=PAGERDUTY_SOURCE_NAME)
-    def _pagerduty() -> List[Any]:
+    def _pagerduty() -> list[Any]:
         return active_resources
 
     source = _pagerduty()

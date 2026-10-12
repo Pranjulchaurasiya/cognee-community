@@ -1,30 +1,35 @@
 """Tests for PagerDuty document formatting and DLT source."""
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 import cognee_community_connector_pagerduty.pagerduty as pd_mod
 
 if pd_mod.dlt is None:
     mock_dlt = MagicMock()
-    mock_dlt.resource = lambda *a, **kw: (lambda f: f)
+    mock_dlt.resource = lambda *a, **kw: lambda f: f
+
     def fake_source(*a, **kw):
         def dec(f):
             def wrapper(*wa, **wkw):
                 s = MagicMock()
                 s.name = kw.get("name", "pagerduty")
                 return s
+
             return wrapper
+
         return dec
+
     mock_dlt.source = fake_source
     pd_mod.dlt = mock_dlt
 
 from cognee_community_connector_pagerduty.pagerduty import (
+    DOCUMENT_SOURCE_ATTR,
+    PAGERDUTY_SOURCE_NAME,
     format_incident_document,
     format_service_document,
     pagerduty_source,
-    DOCUMENT_SOURCE_ATTR,
-    PAGERDUTY_SOURCE_NAME,
 )
 
 
@@ -44,7 +49,11 @@ def test_format_incident_document():
         "priority": {"summary": "P1"},
     }
     notes = [
-        {"user": {"summary": "Bob SRE"}, "content": "Investigating replica lag", "created_at": "2026-10-11T12:02:00Z"}
+        {
+            "user": {"summary": "Bob SRE"},
+            "content": "Investigating replica lag",
+            "created_at": "2026-10-11T12:02:00Z",
+        }
     ]
 
     doc = format_incident_document(raw_incident, notes=notes)

@@ -32,6 +32,7 @@ import asyncio
 import cognee
 from cognee_community_connector_pagerduty import pagerduty_source
 
+
 async def main():
     # Configure source
     source = pagerduty_source(
@@ -47,6 +48,7 @@ async def main():
     results = await cognee.search("What incidents affected the database cluster?")
     for res in results:
         print(res)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

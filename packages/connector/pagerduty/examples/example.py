@@ -2,13 +2,15 @@
 
 import asyncio
 import os
+
 import cognee
+
 from cognee_community_connector_pagerduty import pagerduty_source
 
 
 async def main():
     token = os.getenv("PAGERDUTY_API_KEY", "mock_pd_token_for_demo")
-    print(f"Connecting to PagerDuty API...")
+    print("Connecting to PagerDuty API...")
 
     # Configure PagerDuty source (fetches high-urgency or recent incidents + services)
     source = pagerduty_source(
