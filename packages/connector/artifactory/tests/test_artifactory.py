@@ -20,14 +20,13 @@ from cognee_community_connector_artifactory.artifactory import (
 from cognee_community_connector_artifactory.client import (
     ArtifactoryAuthError,
     ArtifactoryClient,
-    ArtifactoryError,
     ArtifactoryNotFoundError,
 )
-
 
 # ===========================================================================
 # Fixtures
 # ===========================================================================
+
 
 @pytest.fixture
 def sample_repository() -> dict[str, Any]:
@@ -85,11 +84,16 @@ def sample_build_info() -> dict[str, Any]:
                 "artifacts": [
                     {
                         "name": "auth-service-1.4.0.jar",
-                        "sha256": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+                        "sha256": (
+                            "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+                        ),
                     }
                 ],
                 "dependencies": [
-                    {"id": "org.springframework.boot:spring-boot-starter:3.2.0", "sha1": "11223344"},
+                    {
+                        "id": "org.springframework.boot:spring-boot-starter:3.2.0",
+                        "sha1": "11223344",
+                    },
                     {"id": "io.jsonwebtoken:jjwt-api:0.12.3", "sha1": "55667788"},
                 ],
             }
@@ -100,6 +104,7 @@ def sample_build_info() -> dict[str, Any]:
 # ===========================================================================
 # Client validation & security tests
 # ===========================================================================
+
 
 def test_client_missing_url(monkeypatch):
     monkeypatch.delenv("ARTIFACTORY_URL", raising=False)
@@ -148,7 +153,9 @@ def test_client_auth_schemes():
     assert "Authorization" not in c_key._headers()
 
     # Basic Auth
-    c_basic = ArtifactoryClient(base_url="https://company.jfrog.io", username="admin", password="password123")
+    c_basic = ArtifactoryClient(
+        base_url="https://company.jfrog.io", username="admin", password="password123"
+    )
     assert c_basic._auth() == ("admin", "password123")
 
 
@@ -167,27 +174,32 @@ def test_client_credential_redaction():
 # Client HTTP operations & error handling
 # ===========================================================================
 
+
 def test_client_auth_error_handling():
     client = ArtifactoryClient(base_url="https://company.jfrog.io", token="bad-token")
     mock_resp = MagicMock(spec=httpx.Response)
     mock_resp.status_code = 401
-    with patch("httpx.Client.request", return_value=mock_resp):
-        with pytest.raises(ArtifactoryAuthError, match="authentication failed"):
-            client.request("GET", "/api/repositories")
+    with (
+        patch("httpx.Client.request", return_value=mock_resp),
+        pytest.raises(ArtifactoryAuthError, match="auth failed"),
+    ):
+        client.request("GET", "/api/repositories")
 
 
 def test_client_not_found_error_handling():
     client = ArtifactoryClient(base_url="https://company.jfrog.io", token="good-token")
     mock_resp = MagicMock(spec=httpx.Response)
     mock_resp.status_code = 404
-    with patch("httpx.Client.request", return_value=mock_resp):
-        with pytest.raises(ArtifactoryNotFoundError, match="resource not found"):
-            client.request("GET", "/api/repositories/nonexistent")
+    with (
+        patch("httpx.Client.request", return_value=mock_resp),
+        pytest.raises(ArtifactoryNotFoundError, match="resource not found"),
+    ):
+        client.request("GET", "/api/repositories/nonexistent")
 
 
 def test_client_retry_and_recovery():
     client = ArtifactoryClient(base_url="https://company.jfrog.io", token="tok")
-    
+
     resp_fail = MagicMock(spec=httpx.Response)
     resp_fail.status_code = 503
 
@@ -209,7 +221,9 @@ def test_client_get_repositories():
     ]
     with patch.object(client, "request", return_value=mock_repos) as mock_req:
         res = client.get_repositories(repo_type="local", package_type="docker")
-        mock_req.assert_called_once_with("GET", "/api/repositories", params={"type": "local", "packageType": "docker"})
+        mock_req.assert_called_once_with(
+            "GET", "/api/repositories", params={"type": "local", "packageType": "docker"}
+        )
         assert len(res) == 2
         assert res[0]["key"] == "docker-local"
 
@@ -237,6 +251,7 @@ def test_client_execute_aql():
 # Markdown document rendering tests
 # ===========================================================================
 
+
 def test_repo_to_document_rendering(sample_repository):
     doc = _repo_to_document(sample_repository, "https://company.jfrog.io/artifactory")
     assert doc["id"] == "artifactory_repo_docker-prod-local"
@@ -257,13 +272,17 @@ def test_artifact_to_document_rendering(sample_artifact_item, sample_properties)
         sample_properties,
         "https://company.jfrog.io/artifactory",
     )
-    assert doc["id"] == "artifactory_art_docker-prod-local_services_auth-service_v1.4.0_manifest.json"
+    assert (
+        doc["id"] == "artifactory_art_docker-prod-local_services_auth-service_v1.4.0_manifest.json"
+    )
     assert doc["title"] == "Artifactory Artifact: manifest.json in docker-prod-local"
     content = doc["content"]
     assert "# Artifactory Artifact: manifest.json" in content
     assert "**Repository**: `docker-prod-local`" in content
     assert "**File Name**: `manifest.json`" in content
-    assert "**SHA-256**: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`" in content
+    assert (
+        "**SHA-256**: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`" in content
+    )
     assert "**SHA-1**: `da39a3ee5e6b4b0d3255bfef95601890afd80709`" in content
     assert "**MD5**: `d41d8cd98f00b204e9800998ecf8427e`" in content
     assert "**build.name**: `auth-service-pipeline`" in content
@@ -292,6 +311,7 @@ def test_build_to_document_rendering(sample_build_info):
 # ===========================================================================
 # dlt source and pipeline invariants
 # ===========================================================================
+
 
 def test_artifactory_source_attributes():
     mock_client = MagicMock(spec=ArtifactoryClient)
@@ -328,7 +348,9 @@ def test_artifactory_source_selective_resources():
     assert ARTIFACTORY_BUILDS_TABLE_NAME not in resources
 
 
-def test_artifactory_source_execution(sample_repository, sample_artifact_item, sample_properties, sample_build_info):
+def test_artifactory_source_execution(
+    sample_repository, sample_artifact_item, sample_properties, sample_build_info
+):
     mock_client = MagicMock(spec=ArtifactoryClient)
     mock_client.base_url = "https://company.jfrog.io/artifactory"
     mock_client.get_repositories.return_value = [sample_repository]

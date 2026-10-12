@@ -26,6 +26,7 @@ import asyncio
 import cognee
 from cognee_community_connector_artifactory import artifactory_source
 
+
 async def main():
     # Ingest repositories, artifacts, and build runs
     source = artifactory_source(
@@ -44,6 +45,7 @@ async def main():
         "Which Docker image was published from commit 9f8a2b and what are its dependencies?"
     )
     print(results)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

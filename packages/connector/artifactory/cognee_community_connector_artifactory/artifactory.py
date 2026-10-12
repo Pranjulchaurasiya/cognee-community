@@ -8,14 +8,15 @@ Uses ``write_disposition="replace"`` and ``DOCUMENT_SOURCE_ATTR = "artifactory"`
 decommissioned packages and builds automatically drop out of Cognee's memory via orphan cleanup.
 """
 
-import os
 from typing import Any
 
 try:
     from cognee.shared.logging_utils import get_logger
+
     logger = get_logger("artifactory_connector")
 except ImportError:
     import logging
+
     logger = logging.getLogger("artifactory_connector")
 
 try:
@@ -63,11 +64,13 @@ def artifactory_source(
             Falls back to ``ARTIFACTORY_API_KEY`` environment variable.
         username: Username for basic auth fallback.
         password: Password for basic auth fallback.
-        repo_keys: Restrict ingestion to specific repository keys (e.g. ``["docker-local", "libs-release"]``).
+        repo_keys: Restrict ingestion to specific repository keys
+            (e.g. ``["docker-local", "libs-release"]``).
         repo_type: Filter by repository type: ``"local"``, ``"remote"``, or ``"virtual"``.
         package_type: Filter by package type: ``"docker"``, ``"maven"``, ``"npm"``, ``"pypi"``, etc.
         include_artifacts: Whether to ingest artifact metadata within repositories (default: True).
-        include_builds: Whether to ingest CI/CD build info and SBOM dependency trees (default: True).
+        include_builds: Whether to ingest CI/CD build info and SBOM dependency trees
+            (default: True).
         build_names: Restrict build ingestion to specific build names.
         artifact_limit_per_repo: Maximum artifacts to ingest per repository (default: 100).
         verify_ssl: Whether to verify SSL certificates (default: True).
@@ -134,7 +137,9 @@ def artifactory_source(
                 continue
             try:
                 # First try AQL search for fast batch retrieval
-                aql = f'items.find({{"repo":"{key}","type":"file"}}).limit({artifact_limit_per_repo})'
+                aql = (
+                    f'items.find({{"repo":"{key}","type":"file"}}).limit({artifact_limit_per_repo})'
+                )
                 results = client.execute_aql(aql)
                 if results:
                     for item in results:
@@ -197,7 +202,9 @@ def artifactory_source(
                             info = client.get_build_info(b_name, b_num)
                             yield _build_to_document(b_name, b_num, info, server_base)
                 except Exception as exc:
-                    logger.warning("Artifactory: could not fetch build info for '%s': %s", b_name, exc)
+                    logger.warning(
+                        "Artifactory: could not fetch build info for '%s': %s", b_name, exc
+                    )
 
         except Exception as exc:
             logger.warning("Artifactory: could not fetch build catalog: %s", exc)
@@ -241,11 +248,13 @@ def _repo_to_document(repo: dict[str, Any], base_url: str) -> dict[str, Any]:
     ]
 
     if notes:
-        lines.extend([
-            "",
-            "## Maintenance Notes",
-            notes,
-        ])
+        lines.extend(
+            [
+                "",
+                "## Maintenance Notes",
+                notes,
+            ]
+        )
 
     url_path = f"{base_url}/webapp/#/artifacts/browse/tree/General/{key}"
 
@@ -301,10 +310,12 @@ def _artifact_to_document(
     ]
 
     if properties:
-        lines.extend([
-            "",
-            "## Attached Metadata & Build Tags",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Attached Metadata & Build Tags",
+            ]
+        )
         for p_key, p_val in properties.items():
             val_str = ", ".join(p_val) if isinstance(p_val, list) else str(p_val)
             lines.append(f"- **{p_key}**: `{val_str}`")
@@ -326,7 +337,7 @@ def _build_to_document(
     build_info: dict[str, Any],
     base_url: str,
 ) -> dict[str, Any]:
-    """Convert CI/CD build provenance and SBOM dependency records into a structured markdown document."""
+    """Convert build provenance and SBOM dependency records into structured markdown."""
     started = build_info.get("started", "N/A")
     duration = build_info.get("durationMillis", 0)
     agent = build_info.get("agent", {})
@@ -366,12 +377,14 @@ def _build_to_document(
         total_artifacts += len(artifacts)
         total_deps += len(deps)
 
-        lines.extend([
-            "",
-            f"### Module: {mod_id}",
-            f"- **Published Artifacts Count**: {len(artifacts)}",
-            f"- **Declared Dependencies Count (SBOM)**: {len(deps)}",
-        ])
+        lines.extend(
+            [
+                "",
+                f"### Module: {mod_id}",
+                f"- **Published Artifacts Count**: {len(artifacts)}",
+                f"- **Declared Dependencies Count (SBOM)**: {len(deps)}",
+            ]
+        )
 
         if artifacts:
             lines.append("  - **Published Artifacts**:")

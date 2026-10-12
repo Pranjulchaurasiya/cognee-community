@@ -1,7 +1,6 @@
-"""JFrog Artifactory REST API client for repository metadata, artifact trees, and CI/CD build provenance."""
+"""JFrog Artifactory REST API client for repos, artifacts, and CI/CD builds."""
 
 import os
-import re
 import time
 from typing import Any
 from urllib.parse import urlparse
@@ -10,9 +9,11 @@ import httpx
 
 try:
     from cognee.shared.logging_utils import get_logger
+
     logger = get_logger("artifactory_client")
 except ImportError:
     import logging
+
     logger = logging.getLogger("artifactory_client")
 
 _MAX_RETRIES = 3
@@ -53,25 +54,25 @@ class ArtifactoryClient:
         parsed = urlparse(raw_url)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
             raise ValueError(
-                f"Invalid JFrog Artifactory URL '{raw_url}'. Must include http:// or https:// scheme and host."
+                f"Invalid JFrog Artifactory URL '{raw_url}'. Scheme and host required."
             )
 
         # Normalize base URL so it points to the Artifactory API root
         cleaned = raw_url.rstrip("/")
-        if not cleaned.endswith("/artifactory"):
-            # Check if /artifactory is already part of the path
-            if "/artifactory" not in cleaned:
-                cleaned = f"{cleaned}/artifactory"
+        if not cleaned.endswith("/artifactory") and "/artifactory" not in cleaned:
+            cleaned = f"{cleaned}/artifactory"
         self.base_url = cleaned
 
-        self.token = token or os.environ.get("ARTIFACTORY_TOKEN") or os.environ.get("JFROG_ACCESS_TOKEN")
+        self.token = (
+            token or os.environ.get("ARTIFACTORY_TOKEN") or os.environ.get("JFROG_ACCESS_TOKEN")
+        )
         self.api_key = api_key or os.environ.get("ARTIFACTORY_API_KEY")
         self.username = username or os.environ.get("ARTIFACTORY_USERNAME")
         self.password = password or os.environ.get("ARTIFACTORY_PASSWORD")
 
         if not any([self.token, self.api_key, (self.username and self.password)]):
             raise ValueError(
-                "JFrog Artifactory authentication required: pass token=, api_key=, or username/password."
+                "JFrog Artifactory authentication required: pass token, api_key, or user/pass."
             )
 
         self.verify_ssl = verify_ssl
@@ -134,7 +135,7 @@ class ArtifactoryClient:
 
                     if resp.status_code in (401, 403):
                         raise ArtifactoryAuthError(
-                            f"JFrog Artifactory authentication failed ({resp.status_code}) on {path}"
+                            f"Artifactory auth failed ({resp.status_code}) on {path}"
                         )
                     if resp.status_code == 404:
                         raise ArtifactoryNotFoundError(
@@ -143,10 +144,14 @@ class ArtifactoryClient:
                     if resp.status_code in (429, 500, 502, 503, 504):
                         if attempt == _MAX_RETRIES - 1:
                             resp.raise_for_status()
-                        delay = 1.5 * (2 ** attempt)
+                        delay = 1.5 * (2**attempt)
                         logger.warning(
                             "Artifactory: received status %d on %s — retrying in %.1fs (%d/%d)",
-                            resp.status_code, path, delay, attempt + 1, _MAX_RETRIES
+                            resp.status_code,
+                            path,
+                            delay,
+                            attempt + 1,
+                            _MAX_RETRIES,
                         )
                         time.sleep(delay)
                         continue
@@ -159,11 +164,16 @@ class ArtifactoryClient:
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 if attempt == _MAX_RETRIES - 1:
                     clean_msg = self.redact(str(exc))
-                    raise ArtifactoryError(f"Network error communicating with Artifactory: {clean_msg}") from exc
-                delay = 1.5 * (2 ** attempt)
+                    raise ArtifactoryError(
+                        f"Network error communicating with Artifactory: {clean_msg}"
+                    ) from exc
+                delay = 1.5 * (2**attempt)
                 logger.warning(
                     "Artifactory: connection error on %s — retrying in %.1fs (%d/%d)",
-                    path, delay, attempt + 1, _MAX_RETRIES
+                    path,
+                    delay,
+                    attempt + 1,
+                    _MAX_RETRIES,
                 )
                 time.sleep(delay)
 
@@ -172,7 +182,7 @@ class ArtifactoryClient:
         repo_type: str | None = None,
         package_type: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List repositories in Artifactory, optionally filtered by type (local, remote, virtual)."""
+        """List repositories in Artifactory, optionally filtered by type."""
         params: dict[str, Any] = {}
         if repo_type:
             params["type"] = repo_type
@@ -191,13 +201,17 @@ class ArtifactoryClient:
     def get_item_info(self, repo_key: str, path: str = "") -> dict[str, Any]:
         """Fetch item metadata (file or directory) from the storage API."""
         clean_path = path.lstrip("/")
-        endpoint = f"/api/storage/{repo_key}/{clean_path}" if clean_path else f"/api/storage/{repo_key}"
+        endpoint = (
+            f"/api/storage/{repo_key}/{clean_path}" if clean_path else f"/api/storage/{repo_key}"
+        )
         return self.request("GET", endpoint)
 
     def get_item_properties(self, repo_key: str, path: str = "") -> dict[str, Any]:
         """Fetch custom user properties attached to an artifact (e.g. build info, git commit)."""
         clean_path = path.lstrip("/")
-        endpoint = f"/api/storage/{repo_key}/{clean_path}" if clean_path else f"/api/storage/{repo_key}"
+        endpoint = (
+            f"/api/storage/{repo_key}/{clean_path}" if clean_path else f"/api/storage/{repo_key}"
+        )
         try:
             data = self.request("GET", endpoint, params={"properties": ""})
             return data.get("properties") or {}
@@ -210,11 +224,20 @@ class ArtifactoryClient:
             endpoint = f"/api/build/{build_name}"
             data = self.request("GET", endpoint)
             builds = data.get("buildsNumbers") or []
-            return [{"build_name": build_name, "uri": b.get("uri", "").lstrip("/"), "started": b.get("started")} for b in builds]
+            return [
+                {
+                    "build_name": build_name,
+                    "uri": b.get("uri", "").lstrip("/"),
+                    "started": b.get("started"),
+                }
+                for b in builds
+            ]
 
         data = self.request("GET", "/api/build")
         builds = data.get("builds") or []
-        return [{"build_name": b.get("uri", "").lstrip("/"), "uri": b.get("uri", "")} for b in builds]
+        return [
+            {"build_name": b.get("uri", "").lstrip("/"), "uri": b.get("uri", "")} for b in builds
+        ]
 
     def get_build_info(self, build_name: str, build_number: str) -> dict[str, Any]:
         """Fetch comprehensive build info (modules, dependencies, CI agent, git VCS) for a run."""
