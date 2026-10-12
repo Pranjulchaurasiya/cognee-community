@@ -8,14 +8,15 @@ Uses ``write_disposition="replace"`` and ``DOCUMENT_SOURCE_ATTR = "unitycatalog"
 decommissioned tables and models automatically drop out of Cognee's memory via orphan cleanup.
 """
 
-import os
 from typing import Any
 
 try:
     from cognee.shared.logging_utils import get_logger
+
     logger = get_logger("unitycatalog_connector")
 except ImportError:
     import logging
+
     logger = logging.getLogger("unitycatalog_connector")
 
 try:
@@ -55,7 +56,8 @@ def unitycatalog_source(
         token: Databricks PAT or Unity Catalog access token.
             Falls back to ``DATABRICKS_TOKEN`` environment variable.
         catalogs: Optional filter to restrict ingestion to specific catalog names.
-        schemas: Optional filter to restrict ingestion to specific schema names (e.g. ``["finance", "ml_models"]``).
+        schemas: Optional filter to restrict ingestion to specific schema names
+            (e.g. ``["finance", "ml_models"]``).
         include_tables: Whether to ingest tables, views, and column definitions (default: True).
         include_models: Whether to ingest registered AI/ML models (default: True).
         verify_ssl: Whether to verify SSL certificates (default: True).
@@ -120,7 +122,9 @@ def unitycatalog_source(
                     total_schemas += 1
                     yield _schema_to_document(s, server_base)
             except Exception as exc:
-                logger.warning("Unity Catalog: error listing schemas in catalog '%s': %s", cat_name, exc)
+                logger.warning(
+                    "Unity Catalog: error listing schemas in catalog '%s': %s", cat_name, exc
+                )
 
         logger.info("Unity Catalog: synced %d schema(s).", total_schemas)
 
@@ -159,7 +163,12 @@ def unitycatalog_source(
                             total_tables += 1
                             yield _table_to_document(t, server_base)
                     except Exception as exc:
-                        logger.warning("Unity Catalog: error listing tables in '%s.%s': %s", cat_name, s_name, exc)
+                        logger.warning(
+                            "Unity Catalog: error listing tables in '%s.%s': %s",
+                            cat_name,
+                            s_name,
+                            exc,
+                        )
 
             except Exception as exc:
                 logger.warning("Unity Catalog: error inspecting catalog '%s': %s", cat_name, exc)
@@ -201,7 +210,12 @@ def unitycatalog_source(
                             total_models += 1
                             yield _model_to_document(m, server_base)
                     except Exception as exc:
-                        logger.warning("Unity Catalog: error listing models in '%s.%s': %s", cat_name, s_name, exc)
+                        logger.warning(
+                            "Unity Catalog: error listing models in '%s.%s': %s",
+                            cat_name,
+                            s_name,
+                            exc,
+                        )
 
             except Exception as exc:
                 logger.warning("Unity Catalog: error inspecting catalog '%s': %s", cat_name, exc)
@@ -353,20 +367,24 @@ def _model_to_document(model: dict[str, Any], base_url: str) -> dict[str, Any]:
     ]
 
     if aliases:
-        lines.extend([
-            "",
-            "## Model Aliases",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Model Aliases",
+            ]
+        )
         for alias in aliases:
             a_name = alias.get("alias_name", "")
             a_ver = alias.get("version_num", "")
             lines.append(f"- **{a_name}**: Version {a_ver}")
 
     if tags:
-        lines.extend([
-            "",
-            "## Tags & Performance Attributes",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Tags & Performance Attributes",
+            ]
+        )
         for t_k, t_v in tags.items():
             lines.append(f"- **{t_k}**: `{t_v}`")
 

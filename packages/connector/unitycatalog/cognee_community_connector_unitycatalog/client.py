@@ -1,4 +1,4 @@
-"""Databricks Unity Catalog REST API client for lakehouse governance, schemas, tables, and AI models."""
+"""Databricks Unity Catalog REST API client for governance, tables, and AI models."""
 
 import os
 import time
@@ -9,9 +9,11 @@ import httpx
 
 try:
     from cognee.shared.logging_utils import get_logger
+
     logger = get_logger("unitycatalog_client")
 except ImportError:
     import logging
+
     logger = logging.getLogger("unitycatalog_client")
 
 _MAX_RETRIES = 3
@@ -47,15 +49,11 @@ class UnityCatalogClient:
             or os.environ.get("DATABRICKS_SERVER_URL")
         )
         if not raw_url:
-            raise ValueError(
-                "Unity Catalog URL required: pass base_url= or set DATABRICKS_HOST / UNITY_CATALOG_URL."
-            )
+            raise ValueError("Unity Catalog URL required: pass base_url= or set DATABRICKS_HOST.")
 
         parsed = urlparse(raw_url)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise ValueError(
-                f"Invalid Unity Catalog URL '{raw_url}'. Must include http:// or https:// scheme and host."
-            )
+            raise ValueError(f"Invalid Unity Catalog URL '{raw_url}'. Scheme and host required.")
 
         cleaned = raw_url.rstrip("/")
         # If user supplied full endpoint path by accident, trim it back to host root
@@ -64,9 +62,7 @@ class UnityCatalogClient:
         self.base_url = cleaned
 
         self.token = (
-            token
-            or os.environ.get("DATABRICKS_TOKEN")
-            or os.environ.get("UNITY_CATALOG_TOKEN")
+            token or os.environ.get("DATABRICKS_TOKEN") or os.environ.get("UNITY_CATALOG_TOKEN")
         )
         if not self.token:
             raise ValueError(
@@ -114,16 +110,18 @@ class UnityCatalogClient:
                             f"Unity Catalog authentication failed ({resp.status_code}) on {path}"
                         )
                     if resp.status_code == 404:
-                        raise UnityCatalogNotFoundError(
-                            f"Unity Catalog resource not found: {path}"
-                        )
+                        raise UnityCatalogNotFoundError(f"Unity Catalog resource not found: {path}")
                     if resp.status_code in (429, 500, 502, 503, 504):
                         if attempt == _MAX_RETRIES - 1:
                             resp.raise_for_status()
-                        delay = 1.5 * (2 ** attempt)
+                        delay = 1.5 * (2**attempt)
                         logger.warning(
                             "Unity Catalog: received status %d on %s — retrying in %.1fs (%d/%d)",
-                            resp.status_code, path, delay, attempt + 1, _MAX_RETRIES
+                            resp.status_code,
+                            path,
+                            delay,
+                            attempt + 1,
+                            _MAX_RETRIES,
                         )
                         time.sleep(delay)
                         continue
@@ -139,10 +137,13 @@ class UnityCatalogClient:
                     raise UnityCatalogError(
                         f"Network error communicating with Unity Catalog: {clean_msg}"
                     ) from exc
-                delay = 1.5 * (2 ** attempt)
+                delay = 1.5 * (2**attempt)
                 logger.warning(
                     "Unity Catalog: connection error on %s — retrying in %.1fs (%d/%d)",
-                    path, delay, attempt + 1, _MAX_RETRIES
+                    path,
+                    delay,
+                    attempt + 1,
+                    _MAX_RETRIES,
                 )
                 time.sleep(delay)
 

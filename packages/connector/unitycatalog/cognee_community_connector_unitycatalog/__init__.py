@@ -7,9 +7,9 @@ from cognee_community_connector_unitycatalog.client import (
 from cognee_community_connector_unitycatalog.unitycatalog import unitycatalog_source
 
 __all__ = [
-    "unitycatalog_source",
+    "UnityCatalogAuthError",
     "UnityCatalogClient",
     "UnityCatalogError",
-    "UnityCatalogAuthError",
     "UnityCatalogNotFoundError",
+    "unitycatalog_source",
 ]

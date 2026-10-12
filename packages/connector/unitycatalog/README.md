@@ -26,6 +26,7 @@ import asyncio
 import cognee
 from cognee_community_connector_unitycatalog import unitycatalog_source
 
+
 async def main():
     # Ingest lakehouse catalogs and tables
     source = unitycatalog_source(
@@ -44,6 +45,7 @@ async def main():
         "What columns exist in the production.finance.settled_transactions table?"
     )
     print(results)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

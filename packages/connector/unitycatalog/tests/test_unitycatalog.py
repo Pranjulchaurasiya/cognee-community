@@ -9,7 +9,6 @@ import pytest
 from cognee_community_connector_unitycatalog.client import (
     UnityCatalogAuthError,
     UnityCatalogClient,
-    UnityCatalogError,
     UnityCatalogNotFoundError,
 )
 from cognee_community_connector_unitycatalog.unitycatalog import (
@@ -26,10 +25,10 @@ from cognee_community_connector_unitycatalog.unitycatalog import (
     unitycatalog_source,
 )
 
-
 # ===========================================================================
 # Fixtures
 # ===========================================================================
+
 
 @pytest.fixture
 def sample_catalog() -> dict[str, Any]:
@@ -115,6 +114,7 @@ def sample_model() -> dict[str, Any]:
 # Client validation & security tests
 # ===========================================================================
 
+
 def test_client_missing_url(monkeypatch):
     monkeypatch.delenv("DATABRICKS_HOST", raising=False)
     monkeypatch.delenv("UNITY_CATALOG_URL", raising=False)
@@ -144,12 +144,16 @@ def test_client_url_normalization():
     assert c1.base_url == "https://adb-123.databricks.com"
 
     # Trims accidental /api/2.1/unity-catalog suffix
-    c2 = UnityCatalogClient(base_url="https://adb-123.databricks.com/api/2.1/unity-catalog", token="tok")
+    c2 = UnityCatalogClient(
+        base_url="https://adb-123.databricks.com/api/2.1/unity-catalog", token="tok"
+    )
     assert c2.base_url == "https://adb-123.databricks.com"
 
 
 def test_client_auth_header():
-    client = UnityCatalogClient(base_url="https://adb-123.databricks.com", token="dapi-super-secret-pat")
+    client = UnityCatalogClient(
+        base_url="https://adb-123.databricks.com", token="dapi-super-secret-pat"
+    )
     assert client._headers()["Authorization"] == "Bearer dapi-super-secret-pat"
 
 
@@ -168,22 +172,27 @@ def test_client_credential_redaction():
 # Client HTTP operations & error handling
 # ===========================================================================
 
+
 def test_client_auth_error_handling():
     client = UnityCatalogClient(base_url="https://adb-123.databricks.com", token="bad-tok")
     mock_resp = MagicMock(spec=httpx.Response)
     mock_resp.status_code = 401
-    with patch("httpx.Client.request", return_value=mock_resp):
-        with pytest.raises(UnityCatalogAuthError, match="authentication failed"):
-            client.request("GET", "/api/2.1/unity-catalog/catalogs")
+    with (
+        patch("httpx.Client.request", return_value=mock_resp),
+        pytest.raises(UnityCatalogAuthError, match="authentication failed"),
+    ):
+        client.request("GET", "/api/2.1/unity-catalog/catalogs")
 
 
 def test_client_not_found_error_handling():
     client = UnityCatalogClient(base_url="https://adb-123.databricks.com", token="good-tok")
     mock_resp = MagicMock(spec=httpx.Response)
     mock_resp.status_code = 404
-    with patch("httpx.Client.request", return_value=mock_resp):
-        with pytest.raises(UnityCatalogNotFoundError, match="resource not found"):
-            client.request("GET", "/api/2.1/unity-catalog/catalogs/nonexistent")
+    with (
+        patch("httpx.Client.request", return_value=mock_resp),
+        pytest.raises(UnityCatalogNotFoundError, match="resource not found"),
+    ):
+        client.request("GET", "/api/2.1/unity-catalog/catalogs/nonexistent")
 
 
 def test_client_retry_and_recovery():
@@ -205,7 +214,9 @@ def test_client_retry_and_recovery():
 
 def test_client_get_catalogs():
     client = UnityCatalogClient(base_url="https://adb-123.databricks.com", token="tok")
-    with patch.object(client, "request", return_value={"catalogs": [{"name": "c1"}, {"name": "c2"}]}):
+    with patch.object(
+        client, "request", return_value={"catalogs": [{"name": "c1"}, {"name": "c2"}]}
+    ):
         cats = client.get_catalogs()
         assert len(cats) == 2
         assert cats[0]["name"] == "c1"
@@ -215,7 +226,9 @@ def test_client_get_schemas():
     client = UnityCatalogClient(base_url="https://adb-123.databricks.com", token="tok")
     with patch.object(client, "request", return_value={"schemas": [{"name": "s1"}]}) as mock_req:
         res = client.get_schemas("c1")
-        mock_req.assert_called_once_with("GET", "/api/2.1/unity-catalog/schemas", params={"catalog_name": "c1"})
+        mock_req.assert_called_once_with(
+            "GET", "/api/2.1/unity-catalog/schemas", params={"catalog_name": "c1"}
+        )
         assert len(res) == 1
         assert res[0]["name"] == "s1"
 
@@ -224,7 +237,11 @@ def test_client_get_tables():
     client = UnityCatalogClient(base_url="https://adb-123.databricks.com", token="tok")
     with patch.object(client, "request", return_value={"tables": [{"name": "t1"}]}) as mock_req:
         res = client.get_tables("c1", "s1")
-        mock_req.assert_called_once_with("GET", "/api/2.1/unity-catalog/tables", params={"catalog_name": "c1", "schema_name": "s1"})
+        mock_req.assert_called_once_with(
+            "GET",
+            "/api/2.1/unity-catalog/tables",
+            params={"catalog_name": "c1", "schema_name": "s1"},
+        )
         assert len(res) == 1
         assert res[0]["name"] == "t1"
 
@@ -240,6 +257,7 @@ def test_client_get_models():
 # ===========================================================================
 # Markdown document rendering tests
 # ===========================================================================
+
 
 def test_catalog_to_document_rendering(sample_catalog):
     doc = _catalog_to_document(sample_catalog, "https://adb-123.databricks.com")
@@ -293,6 +311,7 @@ def test_model_to_document_rendering(sample_model):
 # ===========================================================================
 # dlt source and pipeline invariants
 # ===========================================================================
+
 
 def test_unitycatalog_source_attributes():
     mock_client = MagicMock(spec=UnityCatalogClient)

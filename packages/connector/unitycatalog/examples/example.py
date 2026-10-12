@@ -2,7 +2,9 @@
 
 import asyncio
 import os
+
 import cognee
+
 from cognee_community_connector_unitycatalog import unitycatalog_source
 
 
@@ -26,9 +28,7 @@ async def main():
     await cognee.cognify()
 
     print("Searching for schema definitions and AI models...")
-    results = await cognee.search(
-        "Which Delta table in the analytics catalog stores fraud scores and what is the champion model alias?"
-    )
+    results = await cognee.search("Which Delta table in the analytics catalog stores fraud scores?")
     for res in results:
         print("-", res)
 
