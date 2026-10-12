@@ -3,8 +3,8 @@
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import pytest
 import httpx
+import pytest
 
 try:
     from cognee.tasks.ingestion.dlt_utils import DOCUMENT_SOURCE_ATTR
@@ -16,7 +16,6 @@ from cognee_community_connector_argocd import (
     ARGOCD_SOURCE_NAME,
     ArgoCDAuthError,
     ArgoCDClient,
-    ArgoCDError,
     ArgoCDNotFoundError,
     argocd_source,
 )
@@ -89,6 +88,7 @@ def sample_project() -> dict[str, Any]:
 # Client validation & security tests
 # ===========================================================================
 
+
 def test_client_missing_url(monkeypatch):
     monkeypatch.delenv("ARGOCD_SERVER_URL", raising=False)
     with pytest.raises(ValueError, match="Argo CD server URL required"):
@@ -136,6 +136,7 @@ def test_client_token_redaction():
 # Client HTTP operations & error handling
 # ===========================================================================
 
+
 def test_client_get_applications_with_filter():
     client = ArgoCDClient(
         base_url="https://argocd.example.com",
@@ -150,7 +151,9 @@ def test_client_get_applications_with_filter():
     }
     with patch.object(client, "request", return_value=mock_data) as mock_req:
         result = client.get_applications(projects=["default"], app_names=["app-1", "app-3"])
-        mock_req.assert_called_once_with("GET", "/api/v1/applications", params={"projects": ["default"]})
+        mock_req.assert_called_once_with(
+            "GET", "/api/v1/applications", params={"projects": ["default"]}
+        )
         assert len(result) == 2
         assert [r["metadata"]["name"] for r in result] == ["app-1", "app-3"]
 
@@ -173,9 +176,8 @@ def test_client_auth_error_handling():
     )
     mock_resp = MagicMock(spec=httpx.Response)
     mock_resp.status_code = 401
-    with patch("httpx.Client.request", return_value=mock_resp):
-        with pytest.raises(ArgoCDAuthError):
-            client.request("GET", "/api/v1/applications")
+    with patch("httpx.Client.request", return_value=mock_resp), pytest.raises(ArgoCDAuthError):
+        client.request("GET", "/api/v1/applications")
 
 
 def test_client_not_found_error_handling():
@@ -185,14 +187,14 @@ def test_client_not_found_error_handling():
     )
     mock_resp = MagicMock(spec=httpx.Response)
     mock_resp.status_code = 404
-    with patch("httpx.Client.request", return_value=mock_resp):
-        with pytest.raises(ArgoCDNotFoundError):
-            client.request("GET", "/api/v1/applications/nonexistent")
+    with patch("httpx.Client.request", return_value=mock_resp), pytest.raises(ArgoCDNotFoundError):
+        client.request("GET", "/api/v1/applications/nonexistent")
 
 
 # ===========================================================================
 # Markdown document rendering
 # ===========================================================================
+
 
 def test_application_to_document_rendering(sample_application):
     doc = _application_to_document(sample_application, "https://argocd.example.com")
@@ -228,6 +230,7 @@ def test_project_to_document_rendering(sample_project):
 # ===========================================================================
 # dlt source and integration pipeline invariants
 # ===========================================================================
+
 
 def test_argocd_source_attributes():
     mock_client = MagicMock(spec=ArgoCDClient)

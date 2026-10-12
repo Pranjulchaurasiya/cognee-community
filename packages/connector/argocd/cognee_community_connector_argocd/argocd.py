@@ -1,4 +1,4 @@
-"""DLT source for Argo CD GitOps applications, projects, and cluster states (full snapshot + forget-on-delete).
+"""DLT source for Argo CD GitOps applications, projects, and cluster states.
 
 Fetches Argo CD application manifests and projects, renders their deployment topology
 and health status to structured markdown documents, and yields them as a dlt resource
@@ -8,14 +8,15 @@ Uses ``write_disposition="replace"`` and ``DOCUMENT_SOURCE_ATTR = "argocd"`` so 
 decommissioned Kubernetes applications automatically drop out of Cognee's memory via orphan cleanup.
 """
 
-import os
 from typing import Any
 
 try:
     from cognee.shared.logging_utils import get_logger
+
     logger = get_logger("argocd_connector")
 except ImportError:
     import logging
+
     logger = logging.getLogger("argocd_connector")
 
 try:
@@ -162,26 +163,32 @@ def _application_to_document(app: dict[str, Any], base_url: str) -> dict[str, An
     ]
 
     if images:
-        lines.extend([
-            "",
-            "## Deployed Container Images",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Deployed Container Images",
+            ]
+        )
         for img in images:
             lines.append(f"- `{img}`")
 
     if health_message:
-        lines.extend([
-            "",
-            "## Health Diagnostics",
-            health_message,
-        ])
+        lines.extend(
+            [
+                "",
+                "## Health Diagnostics",
+                health_message,
+            ]
+        )
 
     conditions = status.get("conditions") or []
     if conditions:
-        lines.extend([
-            "",
-            "## Active Conditions",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Active Conditions",
+            ]
+        )
         for cond in conditions:
             c_type = cond.get("type", "Notice")
             c_msg = cond.get("message", "")
@@ -219,10 +226,12 @@ def _project_to_document(proj: dict[str, Any], base_url: str) -> dict[str, Any]:
     for repo in source_repos:
         lines.append(f"- `{repo}`")
 
-    lines.extend([
-        "",
-        "## Allowed Destination Clusters",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Allowed Destination Clusters",
+        ]
+    )
     for dest in destinations:
         server = dest.get("server", "*")
         namespace = dest.get("namespace", "*")

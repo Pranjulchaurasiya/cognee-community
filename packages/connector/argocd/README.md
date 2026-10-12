@@ -24,6 +24,7 @@ import asyncio
 import cognee
 from cognee_community_connector_argocd import argocd_source
 
+
 async def main():
     # Ingest all Argo CD applications and projects
     source = argocd_source(
@@ -39,6 +40,7 @@ async def main():
         "Which services are currently OutOfSync or Degraded in the production cluster?"
     )
     print(results)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

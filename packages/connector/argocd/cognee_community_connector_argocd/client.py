@@ -1,7 +1,6 @@
 """Argo CD API client for querying applications, projects, and cluster topologies."""
 
 import os
-import re
 import time
 from typing import Any
 from urllib.parse import urlparse
@@ -10,9 +9,11 @@ import httpx
 
 try:
     from cognee.shared.logging_utils import get_logger
+
     logger = get_logger("argocd_client")
 except ImportError:
     import logging
+
     logger = logging.getLogger("argocd_client")
 
 _MAX_RETRIES = 3
@@ -50,7 +51,7 @@ class ArgoCDClient:
         parsed = urlparse(raw_url)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
             raise ValueError(
-                f"Invalid Argo CD server URL '{raw_url}'. Must include http:// or https:// scheme and host."
+                f"Invalid Argo CD server URL '{raw_url}'. Must include http/https scheme and host."
             )
 
         self.base_url = raw_url.rstrip("/")
@@ -78,7 +79,7 @@ class ArgoCDClient:
     def request(self, method: str, path: str, params: dict[str, Any] | None = None) -> Any:
         """Execute HTTP request with exponential backoff on transient errors."""
         url = f"{self.base_url}/{path.lstrip('/')}"
-        
+
         for attempt in range(_MAX_RETRIES):
             try:
                 with httpx.Client(verify=self.verify_ssl, timeout=self.timeout) as client:
@@ -88,7 +89,7 @@ class ArgoCDClient:
                         headers=self._headers(),
                         params=params,
                     )
-                    
+
                     if resp.status_code in (401, 403):
                         raise ArgoCDAuthError(
                             f"Argo CD authentication failed ({resp.status_code}) on {path}"
@@ -98,24 +99,31 @@ class ArgoCDClient:
                     if resp.status_code in (429, 500, 502, 503, 504):
                         if attempt == _MAX_RETRIES - 1:
                             resp.raise_for_status()
-                        delay = 1.5 * (2 ** attempt)
+                        delay = 1.5 * (2**attempt)
                         logger.warning(
                             "Argo CD: received status %d on %s — retrying in %.1fs (%d/%d)",
-                            resp.status_code, path, delay, attempt + 1, _MAX_RETRIES
+                            resp.status_code,
+                            path,
+                            delay,
+                            attempt + 1,
+                            _MAX_RETRIES,
                         )
                         time.sleep(delay)
                         continue
-                    
+
                     resp.raise_for_status()
                     return resp.json()
 
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 if attempt == _MAX_RETRIES - 1:
                     raise ArgoCDError(f"Network error communicating with Argo CD: {exc}") from exc
-                delay = 1.5 * (2 ** attempt)
+                delay = 1.5 * (2**attempt)
                 logger.warning(
                     "Argo CD: connection error on %s — retrying in %.1fs (%d/%d)",
-                    path, delay, attempt + 1, _MAX_RETRIES
+                    path,
+                    delay,
+                    attempt + 1,
+                    _MAX_RETRIES,
                 )
                 time.sleep(delay)
 
