@@ -2,7 +2,9 @@
 
 import asyncio
 import os
+
 import cognee
+
 from cognee_community_connector_opsgenie import opsgenie_source
 
 
@@ -21,9 +23,7 @@ async def main():
     await cognee.cognify()
 
     print("Searching for on-call responders...")
-    results = await cognee.search(
-        "Which teams are assigned to open P1 incidents?"
-    )
+    results = await cognee.search("Which teams are assigned to open P1 incidents?")
     for res in results:
         print("-", res)
 

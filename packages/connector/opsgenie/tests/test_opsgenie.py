@@ -3,8 +3,8 @@
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import pytest
 import httpx
+import pytest
 
 try:
     from cognee.tasks.ingestion.dlt_utils import DOCUMENT_SOURCE_ATTR
@@ -18,7 +18,6 @@ from cognee_community_connector_opsgenie import (
     OPSGENIE_SOURCE_NAME,
     OpsgenieAuthError,
     OpsgenieClient,
-    OpsgenieError,
     OpsgenieNotFoundError,
     opsgenie_source,
 )
@@ -108,6 +107,7 @@ def sample_on_calls() -> dict[str, Any]:
 # Client validation & security tests
 # ===========================================================================
 
+
 def test_client_missing_api_key(monkeypatch):
     monkeypatch.delenv("OPSGENIE_API_KEY", raising=False)
     with pytest.raises(ValueError, match="Opsgenie API key required"):
@@ -146,6 +146,7 @@ def test_client_token_redaction():
 # Client HTTP operations & error handling
 # ===========================================================================
 
+
 def test_client_get_alerts_with_query():
     client = OpsgenieClient(api_key="key-123")
     mock_data = {
@@ -159,7 +160,12 @@ def test_client_get_alerts_with_query():
         mock_req.assert_called_once_with(
             "GET",
             "/v2/alerts",
-            params={"limit": 50, "sort": "createdAt", "order": "desc", "query": "status: open AND priority: P1"},
+            params={
+                "limit": 50,
+                "sort": "createdAt",
+                "order": "desc",
+                "query": "status: open AND priority: P1",
+            },
         )
         assert len(res) == 2
 
@@ -179,7 +185,9 @@ def test_client_get_schedules_and_on_calls():
         mock_req.assert_called_once_with("GET", "/v2/schedules")
         assert len(res) == 1
 
-    with patch.object(client, "request", return_value={"data": {"onCallRecipients": ["alice"]}}) as mock_req:
+    with patch.object(
+        client, "request", return_value={"data": {"onCallRecipients": ["alice"]}}
+    ) as mock_req:
         res = client.get_schedule_on_calls("s-1")
         mock_req.assert_called_once_with("GET", "/v2/schedules/s-1/on-calls")
         assert res["onCallRecipients"] == ["alice"]
@@ -189,23 +197,25 @@ def test_client_auth_error_handling():
     client = OpsgenieClient(api_key="invalid-key")
     mock_resp = MagicMock(spec=httpx.Response)
     mock_resp.status_code = 401
-    with patch("httpx.Client.request", return_value=mock_resp):
-        with pytest.raises(OpsgenieAuthError):
-            client.request("GET", "/v2/alerts")
+    with patch("httpx.Client.request", return_value=mock_resp), pytest.raises(OpsgenieAuthError):
+        client.request("GET", "/v2/alerts")
 
 
 def test_client_not_found_error_handling():
     client = OpsgenieClient(api_key="valid-key")
     mock_resp = MagicMock(spec=httpx.Response)
     mock_resp.status_code = 404
-    with patch("httpx.Client.request", return_value=mock_resp):
-        with pytest.raises(OpsgenieNotFoundError):
-            client.request("GET", "/v2/alerts/nonexistent")
+    with (
+        patch("httpx.Client.request", return_value=mock_resp),
+        pytest.raises(OpsgenieNotFoundError),
+    ):
+        client.request("GET", "/v2/alerts/nonexistent")
 
 
 # ===========================================================================
 # Markdown document rendering
 # ===========================================================================
+
 
 def test_alert_to_document_rendering(sample_alert):
     doc = _alert_to_document(sample_alert, "https://api.opsgenie.com")
@@ -252,6 +262,7 @@ def test_escalation_to_document_rendering(sample_escalation):
 # dlt source and integration pipeline invariants
 # ===========================================================================
 
+
 def test_opsgenie_source_attributes():
     mock_client = MagicMock(spec=OpsgenieClient)
     mock_client.base_url = "https://api.opsgenie.com"
@@ -272,7 +283,9 @@ def test_opsgenie_source_attributes():
     assert resources[OPSGENIE_ESCALATIONS_TABLE_NAME].write_disposition == "replace"
 
 
-def test_opsgenie_source_execution(sample_alert, sample_schedule, sample_on_calls, sample_escalation):
+def test_opsgenie_source_execution(
+    sample_alert, sample_schedule, sample_on_calls, sample_escalation
+):
     mock_client = MagicMock(spec=OpsgenieClient)
     mock_client.base_url = "https://api.opsgenie.com"
     mock_client.get_alerts.return_value = [sample_alert]
@@ -299,4 +312,6 @@ def test_opsgenie_source_execution(sample_alert, sample_schedule, sample_on_call
 
     assert len(escalation_rows) == 1
     assert escalation_rows[0]["id"] == "opsgenie_escalation_esc-tier-1"
-    assert escalation_rows[0]["title"] == "Opsgenie Escalation Policy: Production Critical Escalation"
+    assert (
+        escalation_rows[0]["title"] == "Opsgenie Escalation Policy: Production Critical Escalation"
+    )

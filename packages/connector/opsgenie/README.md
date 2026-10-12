@@ -25,6 +25,7 @@ import asyncio
 import cognee
 from cognee_community_connector_opsgenie import opsgenie_source
 
+
 async def main():
     source = opsgenie_source(
         api_key="your-opsgenie-genie-key",
@@ -34,10 +35,9 @@ async def main():
     await cognee.add(source)
     await cognee.cognify()
 
-    results = await cognee.search(
-        "Who is currently on-call for critical P1 alerts?"
-    )
+    results = await cognee.search("Who is currently on-call for critical P1 alerts?")
     print(results)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

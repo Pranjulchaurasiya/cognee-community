@@ -1,4 +1,4 @@
-"""DLT source for Atlassian Opsgenie alerts and on-call schedules (full snapshot + forget-on-delete).
+"""DLT source for Atlassian Opsgenie alerts, on-call schedules, and escalation policies.
 
 Fetches Opsgenie alerts, on-call schedules, and active responder rotations, renders them
 to structured markdown documents, and yields them as dlt resources for Cognee's ingestion
@@ -8,14 +8,15 @@ Sets ``DOCUMENT_SOURCE_ATTR = "opsgenie"`` and ``write_disposition="replace"`` s
 deleted, or expired incidents are automatically cleaned up in Cognee.
 """
 
-import os
 from typing import Any
 
 try:
     from cognee.shared.logging_utils import get_logger
+
     logger = get_logger("opsgenie_connector")
 except ImportError:
     import logging
+
     logger = logging.getLogger("opsgenie_connector")
 
 try:
@@ -31,7 +32,7 @@ OPSGENIE_ESCALATIONS_TABLE_NAME = "opsgenie_escalations"
 OPSGENIE_SOURCE_NAME = "opsgenie"
 
 _EXTRA_HINT = (
-    'The Opsgenie connector requires dependencies: '
+    "The Opsgenie connector requires dependencies: "
     'pip install "cognee-community-connector-opsgenie" (provides dlt and httpx).'
 )
 
@@ -162,27 +163,33 @@ def _alert_to_document(alert: dict[str, Any], base_url: str) -> dict[str, Any]:
     ]
 
     if description:
-        lines.extend([
-            "",
-            "## Description",
-            description,
-        ])
+        lines.extend(
+            [
+                "",
+                "## Description",
+                description,
+            ]
+        )
 
     if responders:
-        lines.extend([
-            "",
-            "## Assigned Responders & Teams",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Assigned Responders & Teams",
+            ]
+        )
         for resp in responders:
             r_type = resp.get("type", "responder")
             r_id = resp.get("name") or resp.get("id") or "unknown"
             lines.append(f"- **{r_type.title()}**: `{r_id}`")
 
     if tags:
-        lines.extend([
-            "",
-            "## Tags",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Tags",
+            ]
+        )
         for tag in tags:
             lines.append(f"- `{tag}`")
 
@@ -219,19 +226,23 @@ def _schedule_to_document(
 
     active_recipients = on_calls.get("onCallRecipients") or []
     if active_recipients:
-        lines.extend([
-            "",
-            "## Active On-Call Participants",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Active On-Call Participants",
+            ]
+        )
         for recipient in active_recipients:
             lines.append(f"- `{recipient}`")
 
     rotations = schedule.get("rotations") or []
     if rotations:
-        lines.extend([
-            "",
-            "## Rotations",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Rotations",
+            ]
+        )
         for rot in rotations:
             rot_name = rot.get("name", "Rotation")
             rot_type = rot.get("type", "weekly")
@@ -285,12 +296,14 @@ def _escalation_to_document(escalation: dict[str, Any], base_url: str) -> dict[s
     if repeat:
         wait_interval = repeat.get("waitInterval", 0)
         count = repeat.get("count", 0)
-        lines.extend([
-            "",
-            "## Repeat Policy",
-            f"- **Repeat Count**: {count}",
-            f"- **Wait Interval**: {wait_interval} minutes",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Repeat Policy",
+                f"- **Repeat Count**: {count}",
+                f"- **Wait Interval**: {wait_interval} minutes",
+            ]
+        )
 
     content = "\n".join(lines)
     web_url = f"{base_url}/escalation/detail/{esc_id}"

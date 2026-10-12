@@ -9,9 +9,11 @@ import httpx
 
 try:
     from cognee.shared.logging_utils import get_logger
+
     logger = get_logger("opsgenie_client")
 except ImportError:
     import logging
+
     logger = logging.getLogger("opsgenie_client")
 
 _MAX_RETRIES = 3
@@ -43,15 +45,13 @@ class OpsgenieClient:
     ):
         self.api_key = api_key or os.environ.get("OPSGENIE_API_KEY")
         if not self.api_key:
-            raise ValueError(
-                "Opsgenie API key required: pass api_key= or set OPSGENIE_API_KEY environment variable."
-            )
+            raise ValueError("Opsgenie API key required: pass api_key= or set OPSGENIE_API_KEY.")
 
         raw_url = base_url or os.environ.get("OPSGENIE_BASE_URL") or _DEFAULT_BASE_URL
         parsed = urlparse(raw_url)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
             raise ValueError(
-                f"Invalid Opsgenie base URL '{raw_url}'. Must include http:// or https:// scheme and host."
+                f"Invalid Opsgenie base URL '{raw_url}'. Must include http/https scheme and host."
             )
 
         self.base_url = raw_url.rstrip("/")
@@ -93,10 +93,14 @@ class OpsgenieClient:
                     if resp.status_code in (429, 500, 502, 503, 504):
                         if attempt == _MAX_RETRIES - 1:
                             resp.raise_for_status()
-                        delay = 1.5 * (2 ** attempt)
+                        delay = 1.5 * (2**attempt)
                         logger.warning(
                             "Opsgenie: received status %d on %s — retrying in %.1fs (%d/%d)",
-                            resp.status_code, path, delay, attempt + 1, _MAX_RETRIES
+                            resp.status_code,
+                            path,
+                            delay,
+                            attempt + 1,
+                            _MAX_RETRIES,
                         )
                         time.sleep(delay)
                         continue
@@ -106,11 +110,16 @@ class OpsgenieClient:
 
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 if attempt == _MAX_RETRIES - 1:
-                    raise OpsgenieError(f"Network error communicating with Opsgenie: {exc}") from exc
-                delay = 1.5 * (2 ** attempt)
+                    raise OpsgenieError(
+                        f"Network error communicating with Opsgenie: {exc}"
+                    ) from exc
+                delay = 1.5 * (2**attempt)
                 logger.warning(
                     "Opsgenie: connection error on %s — retrying in %.1fs (%d/%d)",
-                    path, delay, attempt + 1, _MAX_RETRIES
+                    path,
+                    delay,
+                    attempt + 1,
+                    _MAX_RETRIES,
                 )
                 time.sleep(delay)
 
